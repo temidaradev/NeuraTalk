@@ -10,5 +10,5 @@ type Containers interface {
 }
 
 type AppTabs interface {
-	Sidebar() *container.AppTabs
+	Sidebar(cont *fyne.Container) *container.AppTabs
 }
