@@ -1,4 +1,4 @@
-module github.com/temidaradev/AIChatGUI
+module github.com/temidaradev/NeuraTalk
 
 go 1.24.0
 

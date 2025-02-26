@@ -8,8 +8,9 @@ import (
 type Sidebar struct{}
 
 func (s *Sidebar) Sidebar() *container.AppTabs {
+	aiResponseArea := CreateAIResponseArea()
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Tab 1", widget.NewLabel("Hello")),
+		container.NewTabItem("AI Response", aiResponseArea),
 		container.NewTabItem("Tab 2", widget.NewLabel("World!")),
 	)
 

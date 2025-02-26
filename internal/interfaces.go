@@ -6,7 +6,7 @@ import (
 )
 
 type Containers interface {
-	MakeUI() *fyne.Container
+	MakeUI(tabs *container.AppTabs) *fyne.Container
 }
 
 type AppTabs interface {
