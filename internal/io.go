@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -35,6 +36,7 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 
 	io.InputEntry.OnSubmitted = func(text string) {
 		io.GenerateResponse()
+		io.InputEntry.SetText("")
 	}
 
 	return io
@@ -46,6 +48,10 @@ func (io *InputOutput) GetInput() string {
 
 func (io *InputOutput) SetOutput(response string) {
 	io.OutputLabel.SetText(response)
+	if io.OutputLabel.Text != "" {
+		io.OutputLabel.Wrapping = fyne.TextWrapWord
+		io.OutputLabel.Resize(io.OutputLabel.MinSize())
+	}
 }
 
 func (io *InputOutput) GenerateResponse() {
@@ -56,11 +62,17 @@ func (io *InputOutput) GenerateResponse() {
 	if err != nil {
 		dialog.ShowError(err, io.ParentWindow)
 		return
-
 	}
 
 	prompt := io.GetInput()
+
+	// Start sliding text animation
+	stopChan := make(chan struct{})
+	go io.startSlidingText("Waiting for response", stopChan)
+
 	response, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt)
+	close(stopChan) // Stop the sliding text animation
+
 	if err != nil {
 		dialog.ShowError(err, io.ParentWindow)
 		return
@@ -69,12 +81,32 @@ func (io *InputOutput) GenerateResponse() {
 	io.SetOutput(response)
 }
 
+func (io *InputOutput) startSlidingText(baseText string, stopChan chan struct{}) {
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+
+	dots := ""
+	for {
+		select {
+		case <-ticker.C:
+			dots += "."
+			if len(dots) > 3 {
+				dots = ""
+			}
+			io.OutputLabel.SetText(baseText + dots)
+		case <-stopChan:
+			return
+		}
+	}
+}
+
 func (io *InputOutput) GetContainer() *fyne.Container {
+	scrollContainer := container.NewScroll(io.OutputLabel)
 	return container.NewBorder(
-		io.ModelSelect, // top
-		io.InputEntry,  // bottom
-		nil,            // left
-		nil,            // right
-		io.OutputLabel, // center
+		io.ModelSelect,  // top
+		io.InputEntry,   // bottom
+		nil,             // left
+		nil,             // right
+		scrollContainer, // center
 	)
 }

@@ -54,21 +54,6 @@ func main() {
 	var drawable internal.Containers = &internal.UI{}
 	ui := drawable.MakeUI(tabs)
 
-	// ctx := context.Background()
-	// llm, err := ollama.New(ollama.WithModel(io.SelectedModel))
-	// if err != nil {
-	// 	dialog.ShowError(err, w)
-
-	// }
-
-	// prompt := io.GetInput()
-	// response, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt)
-	// if err != nil {
-	// 	dialog.ShowError(err, w)
-	// }
-
-	// io.SetOutput(response)
-
 	w.SetContent(ui)
 	w.ShowAndRun()
 }
