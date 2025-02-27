@@ -54,57 +54,21 @@ func main() {
 	var drawable internal.Containers = &internal.UI{}
 	ui := drawable.MakeUI(tabs)
 
+	// ctx := context.Background()
+	// llm, err := ollama.New(ollama.WithModel(io.SelectedModel))
+	// if err != nil {
+	// 	dialog.ShowError(err, w)
+
+	// }
+
+	// prompt := io.GetInput()
+	// response, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt)
+	// if err != nil {
+	// 	dialog.ShowError(err, w)
+	// }
+
+	// io.SetOutput(response)
+
 	w.SetContent(ui)
-
-	// selection := internal.NewSelection()
-
-	// selectModelButton := selection.SelectButtonCallback(w)
-
-	// // Content for the pop-up window
-	// popupContent := container.NewVBox(
-	// 	selection.GetContainer(),
-	// 	selectModelButton,
-	// )
-
-	// // Show startup pop-up screen
-	// startupContent := container.NewVBox(
-	// 	widget.NewLabel("Welcome to NeuraTalk!"),
-	// 	widget.NewButton("Get Started", func() {
-	// 		dialog.ShowCustom("Select Model", "Close", popupContent, w)
-	// 	}),
-	// )
-
-	// startupDialog := dialog.NewCustom("Welcome", "Close", startupContent, w)
-	// startupDialog.Show()
-
-	// // Main window content
-	// mainContent := container.NewVBox(
-	// 	widget.NewLabel("Main Application Content"),
-	// 	widget.NewButton("Send", func() {
-	// 		modelName := selection.SelectedModel
-	// 		if modelName == "" {
-	// 			dialog.ShowInformation("Error", "Please select a model first.", w)
-	// 			return
-	// 		}
-
-	// 		ctx := context.Background()
-	// 		llm, err := ollama.New(ollama.WithModel(modelName))
-	// 		if err != nil {
-	// 			dialog.ShowError(err, w)
-	// 			return
-	// 		}
-
-	// 		prompt := "What would be a good company name for a company that makes colorful socks?"
-	// 		response, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt)
-	// 		if err != nil {
-	// 			dialog.ShowError(err, w)
-	// 			return
-	// 		}
-
-	// 		dialog.ShowInformation("AI Response", response, w)
-	// 	}),
-	// )
-
-	// w.SetContent(mainContent)
 	w.ShowAndRun()
 }
