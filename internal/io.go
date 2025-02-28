@@ -3,7 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -14,11 +14,13 @@ import (
 )
 
 type InputOutput struct {
-	InputEntry    *widget.Entry
-	OutputLabel   *widget.Label
-	ModelSelect   *widget.Select
-	SelectedModel string
-	ParentWindow  fyne.Window
+	InputEntry      *widget.Entry
+	OutputLabel     *widget.Label
+	ModelSelect     *widget.Select
+	SelectedModel   string
+	ParentWindow    fyne.Window
+	ScrollContainer *container.Scroll
+	Conversation    []string
 }
 
 func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
@@ -28,10 +30,11 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 	})
 
 	io := &InputOutput{
-		OutputLabel:  widget.NewLabel("AI Response will appear here"),
+		OutputLabel:  widget.NewLabel(""),
 		InputEntry:   widget.NewEntry(),
 		ModelSelect:  modelSelect,
 		ParentWindow: parent,
+		Conversation: []string{},
 	}
 
 	io.InputEntry.OnSubmitted = func(text string) {
@@ -47,15 +50,22 @@ func (io *InputOutput) GetInput() string {
 }
 
 func (io *InputOutput) SetOutput(response string) {
-	io.OutputLabel.SetText(response)
+	io.Conversation = append(io.Conversation, response)
+	fullResponse := strings.Join(io.Conversation, "\n\n")
+	io.OutputLabel.SetText(fullResponse)
 	if io.OutputLabel.Text != "" {
 		io.OutputLabel.Wrapping = fyne.TextWrapWord
 		io.OutputLabel.Resize(io.OutputLabel.MinSize())
+		io.ScrollContainer.ScrollToBottom() // Scroll to the bottom
 	}
 }
 
 func (io *InputOutput) GenerateResponse() {
 	modelName := io.ModelSelect.Selected
+	if modelName == "" {
+		dialog.ShowInformation("Error", "Please select a model first.", io.ParentWindow)
+		return
+	}
 
 	ctx := context.Background()
 	llm, err := ollama.New(ollama.WithModel(modelName))
@@ -65,48 +75,26 @@ func (io *InputOutput) GenerateResponse() {
 	}
 
 	prompt := io.GetInput()
+	fullPrompt := strings.Join(io.Conversation, "\n\n") + "\n\n" + prompt
 
-	// Start sliding text animation
-	stopChan := make(chan struct{})
-	go io.startSlidingText("Waiting for response", stopChan)
-
-	response, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt)
-	close(stopChan) // Stop the sliding text animation
-
+	response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt)
 	if err != nil {
 		dialog.ShowError(err, io.ParentWindow)
 		return
 	}
 
-	io.SetOutput(response)
-}
-
-func (io *InputOutput) startSlidingText(baseText string, stopChan chan struct{}) {
-	ticker := time.NewTicker(300 * time.Millisecond)
-	defer ticker.Stop()
-
-	dots := ""
-	for {
-		select {
-		case <-ticker.C:
-			dots += "."
-			if len(dots) > 3 {
-				dots = ""
-			}
-			io.OutputLabel.SetText(baseText + dots)
-		case <-stopChan:
-			return
-		}
-	}
+	fmt.Println("Response:", response)
+	io.SetOutput(prompt + "\n" + response + "\n\n") // Add two-line separation after each response
 }
 
 func (io *InputOutput) GetContainer() *fyne.Container {
-	scrollContainer := container.NewScroll(io.OutputLabel)
+	io.ScrollContainer = container.NewVScroll(io.OutputLabel)
+	io.ScrollContainer.SetMinSize(fyne.NewSize(400, 300)) // Set a minimum size for the scroll container
 	return container.NewBorder(
-		io.ModelSelect,  // top
-		io.InputEntry,   // bottom
-		nil,             // left
-		nil,             // right
-		scrollContainer, // center
+		io.ModelSelect,     // top
+		io.InputEntry,      // bottom
+		nil,                // left
+		nil,                // right
+		io.ScrollContainer, // center
 	)
 }
