@@ -56,7 +56,7 @@ func (io *InputOutput) SetOutput(response string) {
 	if io.OutputLabel.Text != "" {
 		io.OutputLabel.Wrapping = fyne.TextWrapWord
 		io.OutputLabel.Resize(io.OutputLabel.MinSize())
-		io.ScrollContainer.ScrollToBottom() // Scroll to the bottom
+		io.ScrollContainer.ScrollToBottom()
 	}
 }
 
@@ -84,12 +84,13 @@ func (io *InputOutput) GenerateResponse() {
 	}
 
 	fmt.Println("Response:", response)
-	io.SetOutput(prompt + "\n" + response + "\n\n") // Add two-line separation after each response
+	io.SetOutput(prompt + "\n\n" + response) // Add two-line separation after each response
 }
 
 func (io *InputOutput) GetContainer() *fyne.Container {
 	io.ScrollContainer = container.NewVScroll(io.OutputLabel)
 	io.ScrollContainer.SetMinSize(fyne.NewSize(400, 300)) // Set a minimum size for the scroll container
+	io.OutputLabel.Wrapping = fyne.TextWrapWord           // Ensure text wrapping
 	return container.NewBorder(
 		io.ModelSelect,     // top
 		io.InputEntry,      // bottom
