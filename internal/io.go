@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -21,6 +22,12 @@ type InputOutput struct {
 	ParentWindow    fyne.Window
 	ScrollContainer *container.Scroll
 	Conversation    []string
+	// Animation control
+	animating       bool
+	animationTicker *time.Ticker
+	currentText     string
+	targetText      string
+	charIndex       int
 }
 
 func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
@@ -35,13 +42,13 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 		ModelSelect:  modelSelect,
 		ParentWindow: parent,
 		Conversation: []string{},
+		animating:    false,
 	}
 
 	io.InputEntry.OnSubmitted = func(text string) {
 		io.GenerateResponse()
 		io.InputEntry.SetText("")
 	}
-
 	return io
 }
 
@@ -52,11 +59,68 @@ func (io *InputOutput) GetInput() string {
 func (io *InputOutput) SetOutput(response string) {
 	io.Conversation = append(io.Conversation, response)
 	fullResponse := strings.Join(io.Conversation, "\n\n")
-	io.OutputLabel.SetText(fullResponse)
-	if io.OutputLabel.Text != "" {
-		io.OutputLabel.Wrapping = fyne.TextWrapWord
-		io.OutputLabel.Resize(io.OutputLabel.MinSize())
-		io.ScrollContainer.ScrollToBottom()
+
+	// Instead of setting text directly, animate it
+	io.animateText(fullResponse)
+}
+
+// New method to handle text animation
+func (io *InputOutput) animateText(targetText string) {
+	// If already animating, stop current animation
+	io.stopAnimation()
+
+	// Setup new animation
+	io.animating = true
+	io.targetText = targetText
+	io.currentText = io.OutputLabel.Text
+	io.charIndex = len(io.currentText)
+
+	// Create animation ticker (adjust speed as needed)
+	io.animationTicker = time.NewTicker(30 * time.Millisecond)
+
+	// Start animation in a goroutine
+	go func() {
+		for range io.animationTicker.C {
+			if !io.animating || io.charIndex >= len(io.targetText) {
+				io.stopAnimation()
+				return
+			}
+
+			// Show one more character
+			io.charIndex++
+			displayText := io.targetText[:io.charIndex]
+
+			// Update UI on main thread
+			fyne.CurrentApp().Driver().CanvasForObject(io.OutputLabel).Content().Refresh()
+
+			// Use a separate goroutine to safely update the UI
+			go func(text string) {
+				// Use a small sleep to avoid potential race conditions
+				time.Sleep(1 * time.Millisecond)
+				io.OutputLabel.SetText(text)
+				io.OutputLabel.Wrapping = fyne.TextWrapWord
+				io.OutputLabel.Resize(io.OutputLabel.MinSize())
+				io.ScrollContainer.ScrollToBottom()
+				io.OutputLabel.Refresh()
+			}(displayText)
+		}
+	}()
+}
+
+// New method to stop ongoing animation
+func (io *InputOutput) stopAnimation() {
+	if io.animating && io.animationTicker != nil {
+		io.animationTicker.Stop()
+		io.animating = false
+
+		// Ensure text is fully displayed when stopping animation
+		if io.targetText != "" {
+			io.OutputLabel.SetText(io.targetText)
+			io.OutputLabel.Wrapping = fyne.TextWrapWord
+			io.OutputLabel.Resize(io.OutputLabel.MinSize())
+			io.ScrollContainer.ScrollToBottom()
+			io.OutputLabel.Refresh()
+		}
 	}
 }
 
@@ -67,30 +131,58 @@ func (io *InputOutput) GenerateResponse() {
 		return
 	}
 
-	ctx := context.Background()
-	llm, err := ollama.New(ollama.WithModel(modelName))
-	if err != nil {
-		dialog.ShowError(err, io.ParentWindow)
-		return
-	}
+	// Disable input during generation
+	io.InputEntry.Disable()
 
-	prompt := io.GetInput()
-	fullPrompt := strings.Join(io.Conversation, "\n\n") + "\n\n" + prompt
+	// Show "thinking" indicator
+	userPrompt := io.GetInput()
+	originalConversation := make([]string, len(io.Conversation))
+	copy(originalConversation, io.Conversation)
 
-	response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt)
-	if err != nil {
-		dialog.ShowError(err, io.ParentWindow)
-		return
-	}
+	// Add thinking indicator without changing the actual conversation
+	io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n") + "\n\nYou: " + userPrompt + "\n\nAI: Thinking...")
+	io.OutputLabel.Refresh()
 
-	fmt.Println("Response:", response)
-	io.SetOutput(prompt + "\n\n" + response) // Add two-line separation after each response
+	// Process in background
+	go func() {
+		ctx := context.Background()
+		llm, err := ollama.New(ollama.WithModel(modelName))
+		if err != nil {
+			// We need to handle UI updates on the main thread
+			io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n"))
+			dialog.ShowError(err, io.ParentWindow)
+			io.InputEntry.Enable()
+			return
+		}
+
+		fullPrompt := strings.Join(io.Conversation, "\n\n")
+		if fullPrompt != "" {
+			fullPrompt += "\n\n"
+		}
+		fullPrompt += userPrompt
+
+		response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt)
+		if err != nil {
+			// Restore original conversation on error
+			io.Conversation = originalConversation
+			io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n"))
+			dialog.ShowError(err, io.ParentWindow)
+			io.InputEntry.Enable()
+			return
+		}
+
+		// Format and add the new conversation entry
+		formattedEntry := "You: " + userPrompt + "\n\nAI: " + response
+		io.SetOutput(formattedEntry)
+		io.InputEntry.Enable()
+	}()
 }
 
 func (io *InputOutput) GetContainer() *fyne.Container {
 	io.ScrollContainer = container.NewVScroll(io.OutputLabel)
 	io.ScrollContainer.SetMinSize(fyne.NewSize(400, 300)) // Set a minimum size for the scroll container
 	io.OutputLabel.Wrapping = fyne.TextWrapWord           // Ensure text wrapping
+
 	return container.NewBorder(
 		io.ModelSelect,     // top
 		io.InputEntry,      // bottom
@@ -98,4 +190,19 @@ func (io *InputOutput) GetContainer() *fyne.Container {
 		nil,                // right
 		io.ScrollContainer, // center
 	)
+}
+
+// Add a method to manually control animation speed
+func (io *InputOutput) SetAnimationSpeed(millisPerChar int) {
+	if io.animating && io.animationTicker != nil {
+		io.animationTicker.Stop()
+		io.animationTicker = time.NewTicker(time.Duration(millisPerChar) * time.Millisecond)
+	}
+}
+
+// Add a method to skip animation
+func (io *InputOutput) SkipAnimation() {
+	if io.animating {
+		io.stopAnimation()
+	}
 }
