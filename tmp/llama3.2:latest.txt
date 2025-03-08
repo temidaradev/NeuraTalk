@@ -10,3 +10,7 @@ If you're feelin' adventurous, we could play a game, have a fun chat about a ran
 
 What sounds good to you?
 
+You: hey
+
+AI: hey back atcha! I'm feelin' pretty chill, so I think I'll go with option 3 - just shoot the breeze. You know, see where the conversation takes us. What's been on your mind lately? Anything new or exciting happenin'?
+
