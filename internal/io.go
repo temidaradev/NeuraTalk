@@ -24,6 +24,7 @@ type InputOutput struct {
 	ParentWindow    fyne.Window
 	ScrollContainer *container.Scroll
 	Conversation    []string
+	ClearButton     *widget.Button
 
 	animating       bool
 	animationTicker *time.Ticker
@@ -59,6 +60,16 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 		Conversation: []string{},
 		animating:    false,
 	}
+
+	// Set placeholder text for input
+	io.InputEntry.SetPlaceHolder("Type your message here... (Press Enter to send)")
+
+	// Create clear button
+	io.ClearButton = widget.NewButton("Clear Conversation", func() {
+		io.Conversation = []string{}
+		io.OutputLabel.SetText("Welcome to NeuraTalk! Please select a model to begin chatting.")
+		io.OutputLabel.Refresh()
+	})
 
 	modelSelect := widget.NewSelect(names, func(selected string) {
 		io.SelectedModel = selected
@@ -96,15 +107,21 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 			}
 		}
 
-		dialog.ShowInformation("Model Selected", "Selected model: "+selected, parent)
-		fmt.Println("Selected model:", selected)
+		// Show welcome message for new conversations
+		if len(io.Conversation) == 0 {
+			io.OutputLabel.SetText(fmt.Sprintf("Welcome to NeuraTalk! You are now chatting with %s.\n\nType your message below to begin.", selected))
+			io.OutputLabel.Refresh()
+		}
 	})
 
 	io.ModelSelect = modelSelect
 
+	// Add keyboard shortcuts
 	io.InputEntry.OnSubmitted = func(text string) {
-		io.GenerateResponse()
-		io.InputEntry.SetText("")
+		if strings.TrimSpace(text) != "" {
+			io.GenerateResponse()
+			io.InputEntry.SetText("")
+		}
 	}
 
 	return io
@@ -262,24 +279,31 @@ func (io *InputOutput) stopAnimation() {
 		io.animationTicker = nil
 	}
 }
+
 func (io *InputOutput) GenerateResponse() {
 	modelName := io.ModelSelect.Selected
 	if modelName == "" {
-		dialog.ShowInformation("Error", "Please select a model first.", io.ParentWindow)
+		dialog.ShowInformation("Model Required", "Please select a model from the dropdown menu above to begin chatting.", io.ParentWindow)
 		return
 	}
+
+	userPrompt := io.GetInput()
+	if strings.TrimSpace(userPrompt) == "" {
+		return
+	}
+
 	filePath := fmt.Sprintf("./tmp/%s.txt", modelName)
 
 	// Disable input during generation
 	io.InputEntry.Disable()
+	io.ClearButton.Disable()
 
-	// Show "thinking" indicator
-	userPrompt := io.GetInput()
+	// Show "thinking" indicator with better formatting
 	originalConversation := make([]string, len(io.Conversation))
 	copy(originalConversation, io.Conversation)
 
-	// Add thinking indicator without changing the actual conversation
-	io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n") + "\n\nYou: " + userPrompt + "\n\nAI: Thinking...")
+	thinkingMessage := strings.Join(io.Conversation, "\n\n") + "\n\nYou: " + userPrompt + "\n\nAI: Thinking..."
+	io.OutputLabel.SetText(thinkingMessage)
 	io.OutputLabel.Refresh()
 
 	// Process in background
@@ -287,10 +311,10 @@ func (io *InputOutput) GenerateResponse() {
 		ctx := context.Background()
 		llm, err := ollama.New(ollama.WithModel(modelName))
 		if err != nil {
-			// We need to handle UI updates on the main thread
 			io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n"))
-			dialog.ShowError(err, io.ParentWindow)
+			dialog.ShowError(fmt.Errorf("Failed to connect to model: %v", err), io.ParentWindow)
 			io.InputEntry.Enable()
+			io.ClearButton.Enable()
 			return
 		}
 
@@ -302,18 +326,18 @@ func (io *InputOutput) GenerateResponse() {
 
 		response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt)
 		if err != nil {
-			// Restore original conversation on error
 			io.Conversation = originalConversation
 			io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n"))
-			dialog.ShowError(err, io.ParentWindow)
+			dialog.ShowError(fmt.Errorf("Failed to generate response: %v", err), io.ParentWindow)
 			io.InputEntry.Enable()
+			io.ClearButton.Enable()
 			return
 		}
 
-		// Format and add the new conversation entry
 		formattedEntry := "You: " + userPrompt + "\n\nAI: " + response
 		io.SetOutput(formattedEntry)
 		io.InputEntry.Enable()
+		io.ClearButton.Enable()
 
 		// Save the conversation to the file
 		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -328,18 +352,23 @@ func (io *InputOutput) GenerateResponse() {
 			dialog.ShowError(fmt.Errorf("Failed to write conversation: %v", err), io.ParentWindow)
 			return
 		}
-
-		fmt.Println(formattedEntry)
 	}()
 }
 
 func (io *InputOutput) GetContainer() *fyne.Container {
 	io.ScrollContainer = container.NewVScroll(io.OutputLabel)
-	io.ScrollContainer.SetMinSize(fyne.NewSize(400, 300)) // Set a minimum size for the scroll container
-	io.OutputLabel.Wrapping = fyne.TextWrapWord           // Ensure text wrapping
+	io.ScrollContainer.SetMinSize(fyne.NewSize(400, 300))
+	io.OutputLabel.Wrapping = fyne.TextWrapWord
+
+	// Create a container for the model selection and clear button
+	topBar := container.NewHBox(
+		widget.NewLabel("Model:"),
+		io.ModelSelect,
+		io.ClearButton,
+	)
 
 	return container.NewBorder(
-		io.ModelSelect,     // top
+		topBar,             // top
 		io.InputEntry,      // bottom
 		nil,                // left
 		nil,                // right
