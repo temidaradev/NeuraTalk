@@ -48,7 +48,7 @@ func main() {
 	fmt.Println("Parsed Names:", names)
 
 	io := internal.NewInputOutput(names, w)
-	s := internal.NewSettings()
+	s := internal.NewSettings(w, a)
 
 	var apptabs internal.AppTabs = &internal.Sidebar{}
 	tabs := apptabs.Sidebar(io.GetContainer(), s.GetContainer())
