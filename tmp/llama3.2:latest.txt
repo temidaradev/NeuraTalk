@@ -101,3 +101,7 @@ If you're ready to move on, I'd be happy to explain any of the examples further 
 
 Also, don't worry about the "damn" - it's all part of our conversation flow!
 
+You: Hello World
+
+AI: Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
+
