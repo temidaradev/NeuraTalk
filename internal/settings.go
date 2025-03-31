@@ -18,10 +18,10 @@ type Settings struct {
 	ModelConfig    *widget.Button
 }
 
-func NewSettings(window fyne.Window, app fyne.App) *Settings {
+func NewSettings(w fyne.Window, a fyne.App) *Settings {
 	return &Settings{
-		Window: window,
-		App:    app,
+		Window: w,
+		App:    a,
 	}
 }
 
