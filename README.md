@@ -2,7 +2,9 @@
 
 A modern, user-friendly GUI application for interacting with local Ollama language models. NeuraTalk provides a clean interface for chatting with AI models while offering customization options for a personalized experience.
 
-![NeuraTalk Screenshot](screenshot.png)
+![NeuraTalk Homepage Light Screenshot](screenshot_light.png)
+
+![NeuraTalk Homepage Dark Screenshot](screenshot_dark.png)
 
 ## Features
 
