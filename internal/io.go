@@ -1,10 +1,14 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -25,6 +29,7 @@ type InputOutput struct {
 	ScrollContainer *container.Scroll
 	Conversation    []string
 	ClearButton     *widget.Button
+	Settings        *Settings
 
 	animating       bool
 	animationTicker *time.Ticker
@@ -49,9 +54,54 @@ func ensureTmpDirectoryExists() {
 	}
 }
 
-func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
+// Add this function to create the conversations directory structure
+func ensureConversationsDirectoryExists() {
+	// Create conversations directory if it doesn't exist
+	if _, err := os.Stat("./conversations"); os.IsNotExist(err) {
+		err := os.Mkdir("./conversations", 0755)
+		if err != nil {
+			log.Println("Error creating conversations directory:", err)
+		}
+	}
+}
+
+// Add this function to save a conversation to the conversations folder
+func saveConversationToHistory(modelName string, conversation []string) error {
+	// Ensure conversations directory exists
+	ensureConversationsDirectoryExists()
+
+	// Create model directory if it doesn't exist
+	modelDir := filepath.Join("./conversations", modelName)
+	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
+		err := os.Mkdir(modelDir, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create model directory: %v", err)
+		}
+	}
+
+	// Create a timestamped file for this conversation
+	timestamp := time.Now().Format("20060102_150405")
+	fileName := fmt.Sprintf("%s_%s.txt", modelName, timestamp)
+	filePath := filepath.Join(modelDir, fileName)
+
+	// Join conversation with double newlines
+	content := strings.Join(conversation, "\n\n")
+
+	// Write to file
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write conversation file: %v", err)
+	}
+
+	return nil
+}
+
+func NewInputOutput(names []string, parent fyne.Window, settings *Settings) *InputOutput {
 	// Ensure tmp directory exists
 	ensureTmpDirectoryExists()
+
+	// Ensure conversations directory exists
+	ensureConversationsDirectoryExists()
 
 	io := &InputOutput{
 		OutputLabel:  widget.NewLabel(""),
@@ -59,6 +109,7 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 		ParentWindow: parent,
 		Conversation: []string{},
 		animating:    false,
+		Settings:     settings,
 	}
 
 	// Set placeholder text for input
@@ -66,9 +117,37 @@ func NewInputOutput(names []string, parent fyne.Window) *InputOutput {
 
 	// Create clear button
 	io.ClearButton = widget.NewButton("Clear Conversation", func() {
+		// Save the current conversation to history before clearing
+		if len(io.Conversation) > 0 && io.ModelSelect.Selected != "" {
+			err := saveConversationToHistory(io.ModelSelect.Selected, io.Conversation)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to save conversation history: %v", err), parent)
+			}
+		}
+
+		// Get the file path for the current model
+		filePath := fmt.Sprintf("./tmp/%s.txt", io.ModelSelect.Selected)
+
+		// Delete the file content by creating an empty file
+		err := os.WriteFile(filePath, []byte(""), 0644)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Failed to clear chat history: %v", err), io.ParentWindow)
+			return
+		}
+
+		// Clear the current conversation
 		io.Conversation = []string{}
-		io.OutputLabel.SetText("Welcome to NeuraTalk! Please select a model to begin chatting.")
+		io.OutputLabel.SetText(fmt.Sprintf("Welcome to NeuraTalk! You are now chatting with %s.\n\nType your message below to begin.", io.ModelSelect.Selected))
 		io.OutputLabel.Refresh()
+
+		// Create a new chat instance with the same model
+		newIO := NewInputOutput([]string{io.ModelSelect.Selected}, io.ParentWindow, io.Settings)
+		newIO.ModelSelect.SetSelected(io.ModelSelect.Selected)
+
+		// Update the last chat in the chat manager
+		if manager, ok := io.ParentWindow.(interface{ SetLastChat(*InputOutput) }); ok {
+			manager.SetLastChat(newIO)
+		}
 	})
 
 	modelSelect := widget.NewSelect(names, func(selected string) {
@@ -309,7 +388,11 @@ func (io *InputOutput) GenerateResponse() {
 	// Process in background
 	go func() {
 		ctx := context.Background()
-		llm, err := ollama.New(ollama.WithModel(modelName))
+
+		// Create Ollama instance with settings
+		llm, err := ollama.New(
+			ollama.WithModel(modelName),
+		)
 		if err != nil {
 			io.OutputLabel.SetText(strings.Join(io.Conversation, "\n\n"))
 			dialog.ShowError(fmt.Errorf("Failed to connect to model: %v", err), io.ParentWindow)
@@ -317,6 +400,13 @@ func (io *InputOutput) GenerateResponse() {
 			io.ClearButton.Enable()
 			return
 		}
+
+		// Apply settings to the context
+		ctx = context.WithValue(ctx, "temperature", io.Settings.GetTemperature())
+		ctx = context.WithValue(ctx, "top_p", io.Settings.GetTopP())
+		ctx = context.WithValue(ctx, "top_k", io.Settings.GetTopK())
+		ctx = context.WithValue(ctx, "num_ctx", io.Settings.GetContextLength())
+		ctx = context.WithValue(ctx, "num_predict", io.Settings.GetMaxTokens())
 
 		fullPrompt := strings.Join(io.Conversation, "\n\n")
 		if fullPrompt != "" {
@@ -352,6 +442,12 @@ func (io *InputOutput) GenerateResponse() {
 			dialog.ShowError(fmt.Errorf("Failed to write conversation: %v", err), io.ParentWindow)
 			return
 		}
+
+		// Save to conversations history
+		err = saveConversationToHistory(modelName, io.Conversation)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Failed to save to conversation history: %v", err), io.ParentWindow)
+		}
 	}()
 }
 
@@ -364,7 +460,31 @@ func (io *InputOutput) GetContainer() *fyne.Container {
 	topBar := container.NewHBox(
 		widget.NewLabel("Model:"),
 		io.ModelSelect,
-		io.ClearButton,
+		widget.NewButton("Clear Chat", func() {
+			// Get the file path for the current model
+			filePath := fmt.Sprintf("./tmp/%s.txt", io.ModelSelect.Selected)
+
+			// Delete the file content by creating an empty file
+			err := os.WriteFile(filePath, []byte(""), 0644)
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to clear chat history: %v", err), io.ParentWindow)
+				return
+			}
+
+			// Clear the current conversation
+			io.Conversation = []string{}
+			io.OutputLabel.SetText(fmt.Sprintf("Welcome to NeuraTalk! You are now chatting with %s.\n\nType your message below to begin.", io.ModelSelect.Selected))
+			io.OutputLabel.Refresh()
+
+			// Create a new chat instance with the same model
+			newIO := NewInputOutput([]string{io.ModelSelect.Selected}, io.ParentWindow, io.Settings)
+			newIO.ModelSelect.SetSelected(io.ModelSelect.Selected)
+
+			// Update the last chat in the chat manager
+			if manager, ok := io.ParentWindow.(interface{ SetLastChat(*InputOutput) }); ok {
+				manager.SetLastChat(newIO)
+			}
+		}),
 	)
 
 	return container.NewBorder(
@@ -389,4 +509,94 @@ func (io *InputOutput) SkipAnimation() {
 	if io.animating {
 		io.stopAnimation()
 	}
+}
+
+func findOllamaBinary() (string, error) {
+	// Check if ollama is in PATH
+	ollamaPath, err := exec.LookPath("ollama")
+	if err == nil {
+		return ollamaPath, nil
+	}
+
+	// Common installation paths based on OS
+	var possiblePaths []string
+	switch runtime.GOOS {
+	case "darwin":
+		possiblePaths = []string{
+			"/usr/local/bin/ollama",
+			"/opt/homebrew/bin/ollama",
+			filepath.Join(os.Getenv("HOME"), "go/bin/ollama"),
+		}
+	case "windows":
+		possiblePaths = []string{
+			"C:\\Program Files\\Ollama\\ollama.exe",
+			"C:\\Program Files (x86)\\Ollama\\ollama.exe",
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "ollama\\ollama.exe"),
+		}
+	case "linux":
+		possiblePaths = []string{
+			"/usr/bin/ollama",
+			"/usr/local/bin/ollama",
+			filepath.Join(os.Getenv("HOME"), "go/bin/ollama"),
+		}
+	}
+
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("ollama not found in PATH or common installation locations")
+}
+
+func getOllamaModels() ([]string, error) {
+	ollamaPath, err := findOllamaBinary()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find ollama: %v", err)
+	}
+
+	// Check if ollama service is running
+	checkCmd := exec.Command(ollamaPath, "list")
+	var checkOut bytes.Buffer
+	checkCmd.Stdout = &checkOut
+	if err := checkCmd.Run(); err != nil {
+		return nil, fmt.Errorf("ollama service is not running: %v", err)
+	}
+
+	// Get list of models
+	cmd := exec.Command(ollamaPath, "list")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to list models: %v", err)
+	}
+
+	output := out.String()
+	var names []string
+	lines := strings.Split(output, "\n")
+	startParsing := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "NAME") {
+			startParsing = true
+			continue
+		}
+		if startParsing {
+			columns := strings.Fields(line)
+			if len(columns) > 0 {
+				names = append(names, columns[0])
+			}
+		}
+	}
+
+	if len(names) == 0 {
+		return nil, fmt.Errorf("no models found. Please install a model using 'ollama pull <model-name>'")
+	}
+
+	return names, nil
+}
+
+// GetAvailableModels returns a list of available Ollama models
+func GetAvailableModels() ([]string, error) {
+	return getOllamaModels()
 }

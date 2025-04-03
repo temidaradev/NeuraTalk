@@ -1,0 +1,12 @@
+{
+  "theme": "Dark",
+  "fontSize": "",
+  "autoScroll": true,
+  "animationSpeed": 20,
+  "model": "",
+  "temperature": 1,
+  "maxTokens": 2048,
+  "topP": 1,
+  "topK": 40,
+  "contextLength": 4096
+}

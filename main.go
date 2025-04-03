@@ -1,13 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -18,108 +13,33 @@ import (
 	"github.com/temidaradev/NeuraTalk/internal"
 )
 
-func findOllamaBinary() (string, error) {
-	// Check if ollama is in PATH
-	ollamaPath, err := exec.LookPath("ollama")
-	if err == nil {
-		return ollamaPath, nil
-	}
-
-	// Common installation paths based on OS
-	var possiblePaths []string
-	switch runtime.GOOS {
-	case "darwin":
-		possiblePaths = []string{
-			"/usr/local/bin/ollama",
-			"/opt/homebrew/bin/ollama",
-			filepath.Join(os.Getenv("HOME"), "go/bin/ollama"),
-		}
-	case "windows":
-		possiblePaths = []string{
-			"C:\\Program Files\\Ollama\\ollama.exe",
-			"C:\\Program Files (x86)\\Ollama\\ollama.exe",
-			filepath.Join(os.Getenv("LOCALAPPDATA"), "ollama\\ollama.exe"),
-		}
-	case "linux":
-		possiblePaths = []string{
-			"/usr/bin/ollama",
-			"/usr/local/bin/ollama",
-			filepath.Join(os.Getenv("HOME"), "go/bin/ollama"),
-		}
-	}
-
-	for _, path := range possiblePaths {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-
-	return "", fmt.Errorf("ollama not found in PATH or common installation locations")
-}
-
-func getOllamaModels() ([]string, error) {
-	ollamaPath, err := findOllamaBinary()
-	if err != nil {
-		return nil, fmt.Errorf("failed to find ollama: %v", err)
-	}
-
-	// Check if ollama service is running
-	checkCmd := exec.Command(ollamaPath, "list")
-	var checkOut bytes.Buffer
-	checkCmd.Stdout = &checkOut
-	if err := checkCmd.Run(); err != nil {
-		return nil, fmt.Errorf("ollama service is not running: %v", err)
-	}
-
-	// Get list of models
-	cmd := exec.Command(ollamaPath, "list")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to list models: %v", err)
-	}
-
-	output := out.String()
-	var names []string
-	lines := strings.Split(output, "\n")
-	startParsing := false
-	for _, line := range lines {
-		if strings.HasPrefix(line, "NAME") {
-			startParsing = true
-			continue
-		}
-		if startParsing {
-			columns := strings.Fields(line)
-			if len(columns) > 0 {
-				names = append(names, columns[0])
-			}
-		}
-	}
-
-	if len(names) == 0 {
-		return nil, fmt.Errorf("no models found. Please install a model using 'ollama pull <model-name>'")
-	}
-
-	return names, nil
-}
-
 type ChatManager struct {
 	Instances []*internal.InputOutput
 	Current   int
-	Sidebar   *internal.Sidebar
 	Window    fyne.Window
+	Sidebar   *internal.Sidebar
 	Settings  *internal.Settings
+	LastChat  *internal.InputOutput
 }
 
-func NewChatManager(names []string, w fyne.Window, a fyne.App) *ChatManager {
-	manager := &ChatManager{
-		Instances: make([]*internal.InputOutput, 0),
-		Current:   0,
-		Window:    w,
+func NewChatManager(w fyne.Window, settings *internal.Settings) *ChatManager {
+	// Get available models
+	models, err := internal.GetAvailableModels()
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("Failed to get available models: %v", err), w)
+		return nil
 	}
 
-	// Create settings first
-	manager.Settings = internal.NewSettings(w, a)
+	// Create first chat instance
+	io := internal.NewInputOutput(models, w, settings)
+
+	manager := &ChatManager{
+		Instances: []*internal.InputOutput{io},
+		Current:   0,
+		Window:    w,
+		Settings:  settings,
+		LastChat:  io,
+	}
 
 	// Create sidebar
 	manager.Sidebar = &internal.Sidebar{}
@@ -127,9 +47,10 @@ func NewChatManager(names []string, w fyne.Window, a fyne.App) *ChatManager {
 	// Set up new chat functionality
 	newChatFunc := func() {
 		// Create a new chat instance
-		newIO := internal.NewInputOutput(names, w)
+		newIO := internal.NewInputOutput(models, w, settings)
 		manager.Instances = append(manager.Instances, newIO)
 		manager.Current = len(manager.Instances) - 1
+		manager.LastChat = newIO
 
 		// Add new chat tab and switch to it
 		chatTab := container.NewTabItemWithIcon(
@@ -141,10 +62,49 @@ func NewChatManager(names []string, w fyne.Window, a fyne.App) *ChatManager {
 		manager.Sidebar.TabContainer.Select(chatTab)
 	}
 
+	// Set up last chat functionality
+	lastChatFunc := func() {
+		if manager.LastChat != nil {
+			// Check if the last chat tab already exists
+			for _, tab := range manager.Sidebar.TabContainer.Items {
+				if tab.Content == manager.LastChat.GetContainer() {
+					manager.Sidebar.TabContainer.Select(tab)
+					return
+				}
+			}
+
+			// Create new tab for last chat
+			chatTab := container.NewTabItemWithIcon(
+				"Last Chat",
+				theme.DocumentIcon(),
+				manager.LastChat.GetContainer(),
+			)
+			manager.Sidebar.TabContainer.Append(chatTab)
+			manager.Sidebar.TabContainer.Select(chatTab)
+		}
+	}
+
 	// Create the New Chat button with the functionality
 	manager.Sidebar.NewChatButton = widget.NewButtonWithIcon("New Chat", theme.ContentAddIcon(), newChatFunc)
+	manager.Sidebar.LastChatButton = widget.NewButtonWithIcon("Last Chat", theme.DocumentIcon(), lastChatFunc)
 
 	return manager
+}
+
+// SetLastChat updates the last chat instance
+func (m *ChatManager) SetLastChat(io *internal.InputOutput) {
+	m.LastChat = io
+	m.Instances = append(m.Instances, io)
+	m.Current = len(m.Instances) - 1
+
+	// Add new chat tab and switch to it
+	chatTab := container.NewTabItemWithIcon(
+		"Last Chat",
+		theme.DocumentIcon(),
+		io.GetContainer(),
+	)
+	m.Sidebar.TabContainer.Append(chatTab)
+	m.Sidebar.TabContainer.Select(chatTab)
 }
 
 func main() {
@@ -152,27 +112,45 @@ func main() {
 	w := a.NewWindow("NeuraTalk")
 	w.Resize(fyne.NewSize(800, 600))
 
+	// Set initial theme before creating any widgets
+	if settings := a.Settings(); settings != nil {
+		settings.SetTheme(theme.LightTheme())
+	}
+
+	// Create settings
+	settings := internal.NewSettings(w, a)
+
+	// Create chat manager with settings
+	manager := NewChatManager(w, settings)
+
 	// Get list of available models
-	names, err := getOllamaModels()
+	names, err := internal.GetAvailableModels()
 	if err != nil {
-		dialog.ShowError(err, w)
-		// Show instructions for installing Ollama
-		instructions := "To use NeuraTalk, you need to:\n\n" +
-			"1. Install Ollama from https://ollama.ai\n" +
-			"2. Start the Ollama service with 'ollama serve'\n" +
-			"3. Install a model with 'ollama pull <model-name>'\n\n" +
-			"Example: ollama pull llama2"
-		dialog.ShowInformation("Setup Required", instructions, w)
-		return
+		dialog.ShowError(fmt.Errorf("Failed to get available models: %v", err), w)
+		os.Exit(1)
 	}
 
 	fmt.Println("Available Models:", names)
 
-	// Create chat manager with settings
-	manager := NewChatManager(names, w, a)
-
 	// Create initial UI
-	split := manager.Sidebar.Sidebar(nil, manager.Settings.GetContainer())
+	split := manager.Sidebar.Sidebar(nil, settings.GetContainer())
 	w.SetContent(split)
+
+	// Start with the last chat if it exists
+	if manager.LastChat != nil {
+		// Create a new tab for the last chat
+		chatTab := container.NewTabItemWithIcon(
+			"Last Chat",
+			theme.DocumentIcon(),
+			manager.LastChat.GetContainer(),
+		)
+		manager.Sidebar.TabContainer.Append(chatTab)
+		manager.Sidebar.TabContainer.Select(chatTab)
+	}
+
+	// Center the window on screen
+	w.CenterOnScreen()
+
+	// Show and run
 	w.ShowAndRun()
 }

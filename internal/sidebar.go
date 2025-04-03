@@ -9,11 +9,12 @@ import (
 )
 
 type Sidebar struct {
-	NewChatButton *widget.Button
-	OptionsButton *widget.Button
-	HomeButton    *widget.Button
-	TabContainer  *container.DocTabs
-	MainContent   *fyne.Container
+	NewChatButton  *widget.Button
+	LastChatButton *widget.Button
+	OptionsButton  *widget.Button
+	HomeButton     *widget.Button
+	TabContainer   *container.DocTabs
+	MainContent    *fyne.Container
 }
 
 func (s *Sidebar) Sidebar(cont *fyne.Container, settings *fyne.Container) *container.Split {
@@ -29,6 +30,13 @@ func (s *Sidebar) Sidebar(cont *fyne.Container, settings *fyne.Container) *conta
 		"Your AI companion for seamless conversations.\n\n" +
 			"Start a new chat to begin your journey!")
 
+	// Create Last Chat button for the home menu
+	welcomeLastChatBtn := widget.NewButtonWithIcon("Last Chat", theme.DocumentIcon(), func() {
+		if s.LastChatButton != nil && s.LastChatButton.OnTapped != nil {
+			s.LastChatButton.OnTapped()
+		}
+	})
+
 	welcomeNewChatBtn := widget.NewButtonWithIcon("New Chat", theme.ContentAddIcon(), func() {
 		if s.NewChatButton != nil && s.NewChatButton.OnTapped != nil {
 			s.NewChatButton.OnTapped()
@@ -40,6 +48,11 @@ func (s *Sidebar) Sidebar(cont *fyne.Container, settings *fyne.Container) *conta
 		welcomeTitle,
 		welcomeText,
 		layout.NewSpacer(),
+		container.NewHBox(
+			layout.NewSpacer(),
+			welcomeLastChatBtn,
+			layout.NewSpacer(),
+		),
 		container.NewHBox(
 			layout.NewSpacer(),
 			welcomeNewChatBtn,
