@@ -21,33 +21,117 @@ A modern, user-friendly GUI application for interacting with local Ollama langua
   - Persistent chat history per model
   - Smooth message animations
 - ⌨️ **Keyboard Shortcuts**: Quick and efficient interaction
+- 🔄 **Cross-Platform Support**: Works on macOS and Linux
 
 ## Prerequisites
 
 - Go 1.24.0 or later
 - CGO enabled
 - Ollama installed and running locally
+- For macOS: Homebrew package manager
+- For Linux: A supported package manager (apt, dnf, yum, or pacman)
 
 ## Installation
 
+### macOS
+
 1. **Clone The Repo**:
+
    ```bash
    git clone https://github.com/temidaradev/NeuraTalk.git
    cd NeuraTalk
    ```
 
 2. **Make the Script Executable**:
-   Run the following command to make the script executable:
 
    ```bash
    chmod +x install.sh
    ```
 
 3. **Run the Install Script**:
-   Execute the script with sudo privileges to install NeuraTalk:
+
+   ```bash
+   ./install.sh
+   ```
+
+   The script will:
+
+   - Install required dependencies via Homebrew
+   - Build the application
+   - Create an application bundle in your Applications folder
+   - Set up the application icon
+
+### Linux
+
+1. **Clone The Repo**:
+
+   ```bash
+   git clone https://github.com/temidaradev/NeuraTalk.git
+   cd NeuraTalk
+   ```
+
+2. **Make the Script Executable**:
+
+   ```bash
+   chmod +x install.sh
+   ```
+
+3. **Run the Install Script**:
+
    ```bash
    sudo ./install.sh
    ```
+
+   The script will:
+
+   - Install required system dependencies
+   - Build the application
+   - Install the binary to /usr/local/bin
+   - Create desktop entry and icon
+   - Set up application menu integration
+
+## Uninstallation
+
+### macOS
+
+1. **Make the Script Executable**:
+
+   ```bash
+   chmod +x uninstall.sh
+   ```
+
+2. **Run the Uninstall Script**:
+
+   ```bash
+   ./uninstall.sh
+   ```
+
+   The script will:
+
+   - Remove the application bundle
+   - Clean up temporary files
+   - Remove conversation history
+
+### Linux
+
+1. **Make the Script Executable**:
+
+   ```bash
+   chmod +x uninstall.sh
+   ```
+
+2. **Run the Uninstall Script**:
+
+   ```bash
+   sudo ./uninstall.sh
+   ```
+
+   The script will:
+
+   - Remove the application binary
+   - Remove desktop entry and icon
+   - Clean up temporary files
+   - Remove conversation history
 
 ## Usage
 
