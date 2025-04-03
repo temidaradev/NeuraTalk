@@ -30,8 +30,11 @@ A modern, user-friendly GUI application for interacting with local Ollama langua
 
 ## Installation
 
-1. **Download the Install Script**:
-   Ensure you have the `install.sh` script in your project directory.
+1. **Clone The Repo**:
+   ```bash
+   git clone https://github.com/temidaradev/NeuraTalk.git
+   cd NeuraTalk
+   ```
 
 2. **Make the Script Executable**:
    Run the following command to make the script executable:
