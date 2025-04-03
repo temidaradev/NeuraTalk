@@ -1,7 +1,0 @@
-You: helo
-
-AI: Hello! How can I assist you today?
-
-You: sup
-
-AI: Not much, just checking in. You know, the usual. How's your day going so far?
