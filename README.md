@@ -28,24 +28,20 @@ A modern, user-friendly GUI application for interacting with local Ollama langua
 
 ## Installation
 
-1. First, ensure Ollama is running:
+1. **Download the Install Script**:
+   Ensure you have the `install.sh` script in your project directory.
+
+2. **Make the Script Executable**:
+   Run the following command to make the script executable:
 
    ```bash
-   ollama serve
+   chmod +x install.sh
    ```
 
-2. Clone the repository:
-
+3. **Run the Install Script**:
+   Execute the script with sudo privileges to install NeuraTalk:
    ```bash
-   git clone https://github.com/yourusername/NeuraTalk.git
-   cd NeuraTalk
-   ```
-
-3. Run the application:
-   ```bash
-   make run
-   # or
-   go run main.go
+   sudo ./install.sh
    ```
 
 ## Usage
