@@ -1,0 +1,11 @@
+You: helo
+
+AI: Hello! How can I assist you today?
+
+You: sup
+
+AI: Not much, just checking in. You know, the usual. How's your day going so far?
+
+You: sup
+
+AI: It's going alright, I guess. Just processing a lot of information and waiting for my next task. You know how it is. What about you? Anything exciting happening?

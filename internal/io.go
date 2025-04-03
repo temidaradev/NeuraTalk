@@ -112,6 +112,10 @@ func NewInputOutput(names []string, parent fyne.Window, settings *Settings) *Inp
 		Settings:     settings,
 	}
 
+	// Make the output label text selectable
+	io.OutputLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	io.OutputLabel.Wrapping = fyne.TextWrapWord
+
 	// Set placeholder text for input
 	io.InputEntry.SetPlaceHolder("Type your message here... (Press Enter to send)")
 

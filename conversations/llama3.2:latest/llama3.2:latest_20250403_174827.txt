@@ -1,0 +1,7 @@
+You: sup
+
+AI: Not much. How about you?
+
+You: oye
+
+AI: Not much, just chillin'. What's new with you?
