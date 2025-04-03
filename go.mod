@@ -3,7 +3,7 @@ module github.com/temidaradev/NeuraTalk
 go 1.24.0
 
 require (
-	fyne.io/fyne/v2 v2.5.4
+	fyne.io/fyne/v2 v2.5.5
 	github.com/tmc/langchaingo v0.1.13
 )
 
