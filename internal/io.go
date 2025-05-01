@@ -52,9 +52,9 @@ func (io *InputOutput) Build(context *guigui.Context, appender *guigui.ChildWidg
 	u := basicwidget.UnitSize(context)
 	width := 12 * u
 
-	io.getInput.SetMultiline(true)
 	io.getInput.SetAutoWrap(true)
 	io.getInput.SetEditable(true)
+	io.getInput.SetMultiline(true)
 	context.SetEnabled(&io.getInput, true)
 
 	io.getOutput.SetAutoWrap(true)
