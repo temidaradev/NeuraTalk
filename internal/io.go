@@ -7,6 +7,7 @@ import (
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
+	"image"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,15 +50,17 @@ func (io *InputOutput) SetModel(model *Model) {
 
 func (io *InputOutput) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	u := basicwidget.UnitSize(context)
-	//width := 12 * u
+	width := 12 * u
 
 	io.getInput.SetMultiline(true)
 	io.getInput.SetAutoWrap(true)
 	io.getInput.SetEditable(true)
 	context.SetEnabled(&io.getInput, true)
 
-	io.getOutput.SetMultiline(true)
+	io.getOutput.SetAutoWrap(true)
 	io.getOutput.SetSelectable(true)
+	io.getOutput.SetMultiline(true)
+	context.SetSize(&io.getOutput, image.Pt(width/2, u))
 	io.getInput.SetOnEnterPressed(func(text string) {
 		if strings.TrimSpace(text) != "" {
 			io.GenerateResponse()
