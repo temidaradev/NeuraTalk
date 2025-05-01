@@ -27,18 +27,18 @@ func (s *Settings) Build(context *guigui.Context, appender *guigui.ChildWidgetAp
 	s.colorModeText.SetText("Color Mode")
 	s.colorModeSegmentedControl.SetItems([]basicwidget.SegmentedControlItem[guigui.ColorMode]{
 		{
-			Text: "Light",
-			Tag:  guigui.ColorModeLight,
-		},
-		{
 			Text: "Dark",
 			Tag:  guigui.ColorModeDark,
+		},
+		{
+			Text: "Light",
+			Tag:  guigui.ColorModeLight,
 		},
 	})
 	s.colorModeSegmentedControl.SetOnItemSelected(func(index int) {
 		item, ok := s.colorModeSegmentedControl.ItemByIndex(index)
 		if !ok {
-			context.SetColorMode(guigui.ColorModeLight)
+			context.SetColorMode(guigui.ColorModeDark)
 			return
 		}
 		context.SetColorMode(item.Tag)
