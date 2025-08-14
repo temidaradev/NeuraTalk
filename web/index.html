@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>NeuraTalk Web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+        }
+        #loading.hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #app {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        .error-banner {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <h3>Loading NeuraTalk Web...</h3>
+        <p>Connecting to local Ollama server...</p>
+        <div id="status">Initializing WASM application...</div>
+    </div>
+
+    <div id="error" style="display: none;" class="error-banner">
+        <span id="error-message"></span>
+        <button onclick="location.reload()" style="margin-left: 10px;">Retry</button>
+    </div>
+
+    <div id="app"></div>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        // Check if server is running
+        async function checkServer() {
+            try {
+                document.getElementById('status').textContent = 'Checking server connection...';
+                const response = await fetch('/api/models');
+                if (response.ok) {
+                    document.getElementById('status').textContent = 'Server connection established. Loading app...';
+                    return true;
+                } else {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Server check failed:', error);
+                document.getElementById('error-message').textContent = 
+                    'Cannot connect to local server. Make sure the NeuraTalk server is running on localhost:8080';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+                return false;
+            }
+        }
+
+        // Initialize WASM
+        async function initWasm() {
+            if (!(await checkServer())) {
+                return;
+            }
+
+            try {
+                const go = new Go();
+                const result = await WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
+                
+                document.getElementById('status').textContent = 'Starting application...';
+                
+                // Hide loading screen after a short delay to allow app to initialize
+                setTimeout(() => {
+                    document.getElementById('loading').classList.add('hidden');
+                }, 1000);
+
+                go.run(result.instance);
+            } catch (error) {
+                console.error('WASM initialization failed:', error);
+                document.getElementById('error-message').textContent = 
+                    'Failed to load the application. Please refresh the page.';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Start the application
+        initWasm();
+    </script>
+</body>
+</html>

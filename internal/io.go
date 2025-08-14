@@ -166,7 +166,7 @@ func NewInputOutput(names []string, parent fyne.Window, settings *Settings) *Inp
 			file, err := os.Create(filePath)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to create file for model %s: %v", selected, err)
-				dialog.ShowError(fmt.Errorf(msg), parent)
+				dialog.ShowError(fmt.Errorf("%s", msg), parent)
 				log.Println(msg)
 				return
 			}
@@ -603,4 +603,34 @@ func getOllamaModels() ([]string, error) {
 // GetAvailableModels returns a list of available Ollama models
 func GetAvailableModels() ([]string, error) {
 	return getOllamaModels()
+}
+
+// GenerateOllamaResponseHeadless generates a response from Ollama without UI components
+func GenerateOllamaResponseHeadless(modelName, userPrompt string, history []string) (string, error) {
+	ctx := context.Background()
+
+	// Create Ollama instance
+	llm, err := ollama.New(
+		ollama.WithModel(modelName),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to model: %v", err)
+	}
+
+	// Build the full prompt with history
+	fullPrompt := ""
+	if len(history) > 0 {
+		fullPrompt = strings.Join(history, "\n\n") + "\n\n"
+	}
+	fullPrompt += "You: " + userPrompt + "\n\nAI: "
+
+	// Generate response
+	response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate response: %v", err)
+	}
+
+	// Format the complete exchange
+	formattedEntry := "You: " + userPrompt + "\n\nAI: " + response
+	return formattedEntry, nil
 }
